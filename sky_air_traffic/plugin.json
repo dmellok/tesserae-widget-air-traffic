@@ -1,7 +1,7 @@
 {
   "tesserae_compat": "1.x",
   "name": "Sky, Air Traffic",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "kind": "widget",
   "description": "Flights currently overhead at your location via OpenSky Network (free, no key). Radar plus the nearest N flights with callsign, altitude, speed, distance, and the route (SYD\u2192MEL) or registration country.",
   "icon": "ph-airplane-tilt",
