@@ -15,7 +15,32 @@ function fmtAlt(m) {
   if (m == null) return "-";
   const v = Number(m);
   if (!Number.isFinite(v)) return "-";
-  return `${(v / 1000).toFixed(1)}km`;
+  return `${(v / 1000).toFixed(1)} km`;
+}
+
+// OpenSky reports ground speed in m/s; the row shows km/h.
+function fmtSpeed(ms) {
+  if (ms == null) return "";
+  const v = Number(ms);
+  if (!Number.isFinite(v)) return "";
+  return `${Math.round(v * 3.6)} km/h`;
+}
+
+// "SYD→MEL" from the server's route lookup (the show_route option), or
+// "" when the callsign had none; the caller falls back to the country.
+function fmtRoute(route) {
+  if (!route || !route.from || !route.to) return "";
+  const a = route.from.code || "";
+  const b = route.to.code || "";
+  if (!a || !b) return "";
+  return `${a}\u2192${b}`;
+}
+
+function routeTitle(route) {
+  if (!route || !route.from || !route.to) return "";
+  const a = route.from.city || route.from.name || route.from.code || "";
+  const b = route.to.city || route.to.name || route.to.code || "";
+  return a && b ? `${a} to ${b}` : "";
 }
 
 // Initial bearing (forward azimuth) from point 1 to point 2, in
@@ -131,6 +156,7 @@ export default function render(shadow, ctx) {
   const centerLat = Number(data.lat) || 0;
   const centerLon = Number(data.lon) || 0;
   const show_labels = Boolean(options.show_labels) || false;
+  const show_route = options.show_route === true || options.show_route === "true";
 
   if (flights.length === 0) {
     shadow.innerHTML = `
@@ -154,19 +180,30 @@ export default function render(shadow, ctx) {
     const ph = inAir ? "ph-airplane-tilt" : "ph-airplane-landing";
     const rot = Number.isFinite(f.track) ? f.track - 45 : 0;
     const altPct = Math.max(2, Math.min(100, ((Number(f.altitude) || 0) / ALT_CEIL) * 100));
+    // The small tag after the callsign: the route (SYD→MEL) when the
+    // option is on and the lookup knew the callsign, else the aircraft's
+    // registration country, which is all OpenSky itself carries.
+    const route = show_route ? fmtRoute(f.route) : "";
+    const tag = route
+      ? `<small class="at-route" title="${escapeHtml(routeTitle(f.route))}">${escapeHtml(route)}</small>`
+      : f.country ? `<small class="at-country" title="Registered in ${escapeHtml(f.country)}">${escapeHtml(f.country)}</small>` : "";
+    const speed = fmtSpeed(f.velocity);
     return `
       <div class="at-row ${i % 2 ? "is-zebra" : ""}">
         <div class="list-lead at-row-lead">
           <span><small>${show_labels ? i + 1 : ""}</small></span>
           <i class="ph-bold ${ph}" style="color:${accent};transform:rotate(${rot}deg)"></i>
-          <span class="list-title">${escapeHtml(f.callsign || "-")}<small class="at-country">${escapeHtml(f.country || "")}</small></span>
+          <span class="list-title">${escapeHtml(f.callsign || "-")}${tag}</span>
         </div>
         <div class="at-meta">
           <span class="at-alt-bar" title="${escapeHtml(fmtAlt(f.altitude))}">
-            <span class="at-alt-fill" style="height:${altPct.toFixed(0)}%;background:${accent}"></span>
+            <span class="at-alt-fill" style="height:${inAir ? altPct.toFixed(0) : 0}%;background:${accent}"></span>
           </span>
-          <span class="at-alt-text" style="color:${accent}">${escapeHtml(fmtAlt(f.altitude))}</span>
-          ${f.distance_km != null ? `<small class="at-dist">${escapeHtml(f.distance_km + "km")}</small>` : ""}
+          ${inAir && f.altitude != null
+            ? `<span class="at-alt-text" style="color:${accent}"><small class="at-unit">alt</small>${escapeHtml(fmtAlt(f.altitude))}</span>`
+            : `<span class="at-alt-text"><small class="at-unit">ground</small></span>`}
+          ${speed ? `<small class="at-speed">${escapeHtml(speed)}</small>` : ""}
+          ${f.distance_km != null ? `<small class="at-dist">${escapeHtml(f.distance_km + " km")}<span class="at-unit"> away</span></small>` : ""}
         </div>
       </div>`;
   }).join("");
@@ -203,24 +240,25 @@ export default function render(shadow, ctx) {
       display: flex;
       flex-direction: column;
     }
+    /* Stacked: the radar takes a share of the cell's height (the cell is
+       a size container, so cqh resolves) and the list gets the rest, so
+       a small or medium cell still shows rows under the dial rather than
+       a dial that fills the cell and pushes every row out of view. */
     .at-body-vertical .at-radar {
+      flex: 0 0 auto;
       width: 100%;
-      max-height: 14em;
+      height: clamp(5em, 42cqh, 14em);
       display: flex;
       justify-content: center;
     }
     .at-body-vertical .at-radar svg {
-      width: auto;
-      max-width: 100%;
-      max-height: 14em;
+      width: 100%;
+      height: 100%;
     }
     .at-body-vertical .list-body {
-      flex: 0 0 auto;
-    }
-    .at-radar svg {
-      width: auto;
-      max-width: 100%;
-      max-height: 14em;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: hidden;
     }
     .at-row {
       display: flex;
@@ -244,11 +282,35 @@ export default function render(shadow, ctx) {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .at-country {
+    .at-country, .at-route {
       font-weight: var(--fw-semi);
       font-size: .7em;
       margin-left: .4em;
       color: var(--text-muted);
+    }
+    .at-route {
+      color: var(--text-secondary);
+      font-variant-numeric: tabular-nums;
+    }
+    .at-unit {
+      font-weight: var(--fw-semi);
+      font-size: .7em;
+      color: var(--text-muted);
+      margin-right: .3em;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .at-dist .at-unit {
+      margin-right: 0;
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 1em;
+    }
+    .at-speed {
+      color: var(--text-muted);
+      font-weight: var(--fw-semi);
+      font-size: .8em;
+      font-variant-numeric: tabular-nums;
     }
     .at-meta {
       display: flex;
@@ -280,6 +342,17 @@ export default function render(shadow, ctx) {
       font-weight: var(--fw-semi);
       font-size: .8em;
       font-variant-numeric: tabular-nums;
+    }
+    /* The list runs a step under the widget's base size: the base is set
+       from the cell's smaller side, and a row carries five values, so at
+       the base size a medium cell fits one row with the callsign cut. */
+    .list-body { font-size: .85em; }
+    @container (max-width: 700px) {
+      .list-body { font-size: .7em; }
+      .at-dist .at-unit { display: none; }
+    }
+    @container (max-width: 420px) {
+      .at-speed { display: none; }
     }
     @container (max-width: 320px) {
       .at-radar { max-height: 9em; }

@@ -1,9 +1,9 @@
 {
   "tesserae_compat": "1.x",
   "name": "Sky, Air Traffic",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "kind": "widget",
-  "description": "Flights currently overhead at your location via OpenSky Network (free, no key). Shows count + the nearest N flights with callsign / origin country / altitude / speed.",
+  "description": "Flights currently overhead at your location via OpenSky Network (free, no key). Radar plus the nearest N flights with callsign, altitude, speed, distance, and the route (SYD\u2192MEL) or registration country.",
   "icon": "ph-airplane-tilt",
   "supports": { "sizes": ["sm", "md", "lg"] },
   "cell_options": [
@@ -15,8 +15,10 @@
       {"value" : "vertical", "label": "Vertical"},
       {"value" : "horizontal", "label": "Horizontal"}
     ]},
-    {"name": "show_labels", "type": "boolean", "label": "Show Numeric Labels", "default":false}
+    {"name": "show_labels", "type": "boolean", "label": "Show Numeric Labels", "default":false},
+    {"name": "show_route", "type": "boolean", "label": "Show route (departure\u2192arrival)", "default": false,
+     "help": "Looks each callsign up on adsbdb.com and shows SYD\u2192MEL in place of the registration country. Scheduled flights only; private aircraft keep the country."}
   ],
   "render": { "dither": "none", "needs_network": true },
-  "requires": ["network:opensky-network.org"]
+  "requires": ["network:opensky-network.org", "network:api.adsbdb.com"]
 }
